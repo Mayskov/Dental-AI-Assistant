@@ -9,7 +9,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html{padding-top:env(safe-area-inset-top)}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e2e8f0;overflow:hidden}
 input::placeholder{color:#475569}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -479,7 +478,7 @@ function App() {
   return h("div", { style:{ height:"100vh", display:"flex", flexDirection:"column" } },
 
     // ── Safe area spacer for status bar ──
-    h("div", { style:{ background:"#0a0a0f", paddingTop:"env(safe-area-inset-top)", flexShrink:0 } }),
+    h("div", { style:{ background:"#0a0a0f", paddingTop:"max(44px, env(safe-area-inset-top))", flexShrink:0 } }),
 
     // ── Role bar ──
     h("div", { style:{ padding:"10px 12px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", gap:6, background:"rgba(10,10,15,0.98)", flexShrink:0, overflowX:"auto", WebkitOverflowScrolling:"touch" } },
