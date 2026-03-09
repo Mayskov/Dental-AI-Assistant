@@ -480,7 +480,7 @@ function App() {
   return h("div", { style:{ height:"100vh", display:"flex", flexDirection:"column" } },
 
     // ── Safe area spacer for status bar ──
-    h("div", { style:{ background:"#0a0a0f", paddingTop:"env(safe-area-inset-top)", flexShrink:0 } }),
+    h("div", { style:{ background:"#0a0a0f", paddingTop:"calc(env(safe-area-inset-top) + 20px)", flexShrink:0 } }),
 
     // ── Role bar ──
     h("div", { style:{ padding:"10px 12px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", gap:6, background:"rgba(10,10,15,0.98)", flexShrink:0, overflowX:"auto", WebkitOverflowScrolling:"touch" } },
