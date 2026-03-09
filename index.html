@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Dental AI OS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top)}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e2e8f0;overflow:hidden}
+input::placeholder{color:#475569}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes recording{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)}50%{box-shadow:0 0 0 12px rgba(239,68,68,0)}}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useRef, useEffect } = React;
+const h = React.createElement;
+
+const ROLES = [
+  { id:"director",     label:"Директор",     icon:"👔", color:"#a78bfa", greeting:"Доброе утро! 👋 Я — AI-агент вашей клиники.\n\nСегодня: 23 записи, загрузка кресел 78%. Выручка вчера: 1.28M ₸ (+15%).\n\n⚠️ 3 пациента с высоким риском неявки — уже отправила напоминания.\n📦 Композит A2 заканчивается через 4 дня.\n\nЧем могу помочь?" },
+  { id:"receptionist", label:"Администратор", icon:"🧑‍💼", color:"#60a5fa", greeting:"Доброе утро! 👋 Вот сводка на сегодня:\n\n📅 23 записи, первый пациент в 09:00\n📞 2 пропущенных звонка — нужно перезвонить\n⚠️ Серикова в 11:00 — высокий риск неявки\n🆕 3 заявки из WhatsApp ждут записи\n\nЧто делаем первым?" },
+  { id:"doctor",       label:"Врач",          icon:"🩺", color:"#f472b6", greeting:"Доброе утро, доктор! 👋 Ваше расписание на сегодня:\n\n🦷 7 пациентов, первый в 09:00 (Айтымова — чистка)\n🆕 1 первичный пациент в 11:00 (Серикова — осмотр)\n🔬 Лаб. работа для Касымова — готова, можно примерять\n📦 Композит A2 — осталось 3 шт (на 2 дня работы)\n\nЧем помочь?" },
+  { id:"supervisor",   label:"Супервайзер",   icon:"📋", color:"#10b981", greeting:"Доброе утро! 👋 Сводка по маркетингу и операциям:\n\n📊 Конверсия за неделю: 68%\n📉 Бримжанова — 3 пропущенных перезвона\n🎯 Рассылка \"Чистка -20%\" — 45% открыли, 12% записались\n👥 Новых за неделю: 14\n\nЧем помочь?" }
+];
+
+const SCENARIOS = {
+  director:     [ {label:"📅 Расписание",prompt:"Покажи расписание на завтра"}, {label:"📊 Выручка",prompt:"Какая выручка за эту неделю?"}, {label:"👤 Пациент",prompt:"Найди пациента Серикова"}, {label:"📦 Склад",prompt:"Покажи материалы с низким остатком"}, {label:"🔔 Пригласить",prompt:"Кто из пациентов давно не был?"}, {label:"💰 Зарплата",prompt:"Покажи зарплату врачей за этот месяц"} ],
+  receptionist: [ {label:"📅 Расписание",prompt:"Покажи расписание на сегодня"}, {label:"📝 Записать",prompt:"Запиши Касымову Айгуль на чистку к Хасанову на четверг в 14:00"}, {label:"🔄 Перенести",prompt:"Перенеси Мурата с 10:00 на 13:00"}, {label:"👤 Пациент",prompt:"Найди пациента по номеру 707 123 45 67"}, {label:"💬 Сообщение",prompt:"Напиши Айтымовой что её запись подтверждена на завтра 09:00"}, {label:"📞 Звонки",prompt:"Покажи пропущенные звонки"} ],
+  doctor:       [ {label:"📅 Мои пациенты",prompt:"Кто у меня сегодня?"}, {label:"🎤 Голосовая заметка",prompt:"Записать голосовую заметку по пациенту Мурат С."}, {label:"👤 Карта пациента",prompt:"Открой карту пациента Серикова"}, {label:"📦 Есть композит?",prompt:"Есть ли композит A2 на складе?"}, {label:"🔬 Лаб. работы",prompt:"Покажи статус лабораторных работ"}, {label:"📋 План лечения",prompt:"Покажи план лечения Касымова"} ],
+  supervisor:   [ {label:"🎯 Акция",prompt:"Хочу запустить акцию на чистку со скидкой 20%"}, {label:"📊 Админы",prompt:"Покажи эффективность администраторов за неделю"}, {label:"📈 Источники",prompt:"Откуда приходят новые пациенты?"}, {label:"💬 Рассылка",prompt:"Как отработала последняя рассылка?"}, {label:"⭐ Отзывы",prompt:"Покажи отзывы за эту неделю"}, {label:"📉 Отмены",prompt:"Статистика по отменам и неявкам"} ]
+};
+
+const sched = [
+  {time:"09:00", patient:"Айтымова К.",   type:"Чистка",              status:"confirmed", risk:null,        phone:"+7 701 ***-12-34"},
+  {time:"10:00", patient:"Мурат С.",      type:"Пломба 14",           status:"confirmed", risk:null,        phone:"+7 707 ***-56-78"},
+  {time:"11:00", patient:"Серикова А.",   type:"Осмотр",              status:"risk",      risk:"78% неявка",phone:"+7 707 ***-45-67"},
+  {time:"12:00", patient:"—",             type:"Свободно",            status:"free",      risk:null,        phone:""},
+  {time:"13:00", patient:"Касымов Р.",    type:"Имплант консульт.",   status:"confirmed", risk:null,        phone:"+7 705 ***-89-01"},
+  {time:"14:00", patient:"Нурлан Б.",     type:"Снятие слепков",      status:"confirmed", risk:null,        phone:"+7 777 ***-23-45"},
+  {time:"15:00", patient:"—",             type:"Свободно",            status:"free",      risk:null,        phone:""},
+  {time:"15:30", patient:"Бекова Д.",     type:"Коррекция брекетов",  status:"new",       risk:null,        phone:"+7 702 ***-67-89"}
+];
+
+function rowBg(s)     { return s==="free"?"rgba(96,165,250,0.05)":s==="risk"?"rgba(245,158,11,0.08)":s==="new"?"rgba(167,139,250,0.08)":"rgba(255,255,255,0.03)"; }
+function rowBorder(s) { return "1px solid "+(s==="free"?"rgba(96,165,250,0.15)":s==="risk"?"rgba(245,158,11,0.2)":"rgba(255,255,255,0.06)"); }
+
+function PanelSchedule({ role }) {
+  const isDoc = role === "doctor";
+  return h("div", null,
+    h("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 } },
+      h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:0 } },
+        isDoc ? "🦷 Мои пациенты — Сегодня" : "📅 Расписание — " + (role==="receptionist" ? "Сегодня" : "Завтра")),
+      h("div", { style:{ fontSize:11, color:"#94a3b8", background:"rgba(255,255,255,0.05)", padding:"4px 10px", borderRadius:6 } }, "Хасанов Д.Р.")),
+    sched.map((s, i) =>
+      h("div", { key:i, style:{ display:"grid", gridTemplateColumns:"46px 1fr auto", gap:10, padding:"9px 10px", marginBottom:4, background:rowBg(s.status), border:rowBorder(s.status), borderRadius:8, alignItems:"center" } },
+        h("span", { style:{ fontSize:12, fontWeight:600, color:"#94a3b8" } }, s.time),
+        h("div", null,
+          h("div", { style:{ fontSize:13, fontWeight:600, color:s.status==="free"?"#60a5fa":"#f8fafc" } }, s.patient),
+          h("div", { style:{ fontSize:11, color:"#64748b" } }, s.type + (role==="receptionist" && s.phone ? " · "+s.phone : ""))),
+        h("div", { style:{ display:"flex", gap:4, flexWrap:"wrap", justifyContent:"flex-end" } },
+          s.risk && h("div", { style:{ fontSize:9, color:"#f59e0b", background:"rgba(245,158,11,0.1)", padding:"3px 6px", borderRadius:4, fontWeight:600 } }, "⚠ "+s.risk),
+          s.status==="free" && !isDoc && h("div", { style:{ fontSize:9, color:"#60a5fa", background:"rgba(96,165,250,0.1)", padding:"3px 6px", borderRadius:4, fontWeight:600, cursor:"pointer" } }, "+ Записать"),
+          s.status==="new" && h("div", { style:{ fontSize:9, color:"#a78bfa", background:"rgba(167,139,250,0.1)", padding:"3px 6px", borderRadius:4, fontWeight:600 } }, "Первичный"),
+          role==="receptionist" && s.status==="confirmed" && h("div", { style:{ fontSize:9, color:"#10b981", background:"rgba(16,185,129,0.1)", padding:"3px 6px", borderRadius:4, fontWeight:600, cursor:"pointer" } }, "✓ Пришёл"),
+          isDoc && s.status!=="free" && h("div", { style:{ fontSize:9, color:"#f472b6", background:"rgba(244,114,182,0.1)", padding:"3px 6px", borderRadius:4, fontWeight:600, cursor:"pointer" } }, "🎤 Заметка")))),
+    isDoc && h("div", { style:{ marginTop:10, padding:10, background:"rgba(244,114,182,0.06)", border:"1px solid rgba(244,114,182,0.12)", borderRadius:8 } },
+      h("div", { style:{ fontSize:11, color:"#f472b6", fontWeight:600, marginBottom:4 } }, "🤖 AI подготовил"),
+      h("div", { style:{ fontSize:11, color:"#94a3b8", lineHeight:1.5 } }, "Серикова (11:00) — первичный. Жалоба: боль в 36. Аллергия на лидокаин. Рекомендую: артикаин.")),
+    role==="receptionist" && h("div", { style:{ marginTop:10, padding:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:8 } },
+      h("div", { style:{ fontSize:11, color:"#93c5fd", fontWeight:600, marginBottom:4 } }, "💡 Подсказка"),
+      h("div", { style:{ fontSize:11, color:"#94a3b8", lineHeight:1.5 } }, "3 заявки из WhatsApp ждут. Слоты 12:00 и 15:00 свободны.")));
+}
+
+function PanelPatient({ role }) {
+  const isDoc = role === "doctor";
+  return h("div", null,
+    h("div", { style:{ display:"flex", gap:10, alignItems:"start", marginBottom:14 } },
+      h("div", { style:{ width:40, height:40, borderRadius:10, background:"linear-gradient(135deg,#60a5fa,#a78bfa)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:"#fff", flexShrink:0 } }, "СА"),
+      h("div", null,
+        h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:0 } }, "Серикова Айгуль Маратовна"),
+        h("div", { style:{ fontSize:11, color:"#94a3b8" } }, "+7 (707) 123-45-67 · 33 года"))),
+    h("div", { style:{ display:"flex", gap:4, marginBottom:14, flexWrap:"wrap" } },
+      h("span", { style:{ fontSize:10, padding:"2px 7px", borderRadius:4, background:"rgba(96,165,250,0.1)", color:"#93c5fd", fontWeight:600 } }, "Постоянный"),
+      h("span", { style:{ fontSize:10, padding:"2px 7px", borderRadius:4, background:"rgba(96,165,250,0.1)", color:"#93c5fd", fontWeight:600 } }, "Ортодонтия"),
+      h("span", { style:{ fontSize:10, padding:"2px 7px", borderRadius:4, background:"rgba(245,158,11,0.1)", color:"#fcd34d", fontWeight:600 } }, "⚠ Риск оттока"),
+      isDoc && h("span", { style:{ fontSize:10, padding:"2px 7px", borderRadius:4, background:"rgba(239,68,68,0.1)", color:"#f87171", fontWeight:600 } }, "⚠ Аллергия: лидокаин")),
+    isDoc && h("div", { style:{ background:"rgba(239,68,68,0.06)", border:"1px solid rgba(239,68,68,0.15)", borderRadius:8, padding:10, marginBottom:14 } },
+      h("div", { style:{ fontSize:11, fontWeight:600, color:"#f87171", marginBottom:4 } }, "⚕️ Медицинские заметки"),
+      h("div", { style:{ fontSize:11, color:"#cbd5e1", lineHeight:1.6 } }, "• Аллергия: лидокаин → использовать артикаин\n• Гипертония (контролируемая)\n• Последний снимок: 14.09.2025 — кариес 36\n• Боится бормашины — рекомендуется седация")),
+    h("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:14 } },
+      [["Визитов","12"],["Оплачено","487k ₸"],["Бонусы","4 870 ₸"]].map((m,i) =>
+        h("div", { key:i, style:{ background:"rgba(255,255,255,0.03)", borderRadius:8, padding:"7px 8px", textAlign:"center" } },
+          h("div", { style:{ fontSize:9, color:"#64748b" } }, m[0]),
+          h("div", { style:{ fontSize:13, fontWeight:700, color:"#f8fafc" } }, m[1])))),
+    !isDoc && h("div", { style:{ background:"rgba(245,158,11,0.06)", border:"1px solid rgba(245,158,11,0.15)", borderRadius:8, padding:10, marginBottom:14 } },
+      h("div", { style:{ fontSize:11, fontWeight:600, color:"#fcd34d", marginBottom:4 } }, "🤖 AI сводка"),
+      h("div", { style:{ fontSize:11, color:"#cbd5e1", lineHeight:1.5 } }, "Последний визит 6 мес назад. Врач — Хасанов. Рекомендуется чистка. Есть бонусы.")),
+    h("div", { style:{ fontSize:12, fontWeight:600, color:"#94a3b8", marginBottom:6 } }, "История"),
+    [["14.09.2025","Пломба 36 · Хасанов","45k ₸"],["02.06.2025","Чистка · Аканова","25k ₸"],["15.03.2025","Осмотр · Хасанов","15k ₸"]].map((x,i) =>
+      h("div", { key:i, style:{ display:"grid", gridTemplateColumns:"70px 1fr auto", gap:6, padding:"6px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:11 } },
+        h("span", { style:{ color:"#64748b" } }, x[0]),
+        h("span", { style:{ color:"#e2e8f0" } }, x[1]),
+        h("span", { style:{ color:"#94a3b8", fontWeight:600 } }, x[2]))));
+}
+
+function PanelVoiceNote() {
+  const [state, setState] = useState("ready");
+  const [seconds, setSeconds] = useState(0);
+  const timerRef = useRef(null);
+  const fmt = s => String(Math.floor(s/60)).padStart(2,"0") + ":" + String(s%60).padStart(2,"0");
+  const startRec = () => { setState("recording"); setSeconds(0); timerRef.current = setInterval(() => setSeconds(p => p+1), 1000); };
+  const stopRec  = () => { clearInterval(timerRef.current); setState("processing"); };
+  useEffect(() => {
+    if (state === "processing") { const t = setTimeout(() => setState("done"), 2000); return () => clearTimeout(t); }
+  }, [state]);
+
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "🎤 Голосовая заметка"),
+    h("div", { style:{ fontSize:12, color:"#94a3b8", marginBottom:4 } }, "Пациент:"),
+    h("div", { style:{ fontSize:14, fontWeight:600, color:"#f8fafc", marginBottom:16 } }, "Мурат С. · Пломба 14 · Сегодня 10:00"),
+    state === "ready" && h("div", { style:{ textAlign:"center", padding:24 } },
+      h("div", { onClick:startRec, style:{ width:72, height:72, borderRadius:"50%", background:"linear-gradient(135deg,#ef4444,#f472b6)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", cursor:"pointer", fontSize:28 } }, "🎤"),
+      h("div", { style:{ fontSize:13, color:"#94a3b8" } }, "Нажмите чтобы начать запись"),
+      h("div", { style:{ fontSize:11, color:"#64748b", marginTop:4 } }, "Надиктуйте заметки по приёму")),
+    state === "recording" && h("div", { style:{ textAlign:"center", padding:24 } },
+      h("div", { onClick:stopRec, style:{ width:72, height:72, borderRadius:"50%", background:"#ef4444", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", cursor:"pointer", fontSize:28, animation:"recording 1.5s infinite" } }, "⏹"),
+      h("div", { style:{ fontSize:24, fontWeight:700, color:"#f87171", fontFamily:"monospace", marginBottom:4 } }, fmt(seconds)),
+      h("div", { style:{ fontSize:13, color:"#fca5a5" } }, "Запись... Нажмите чтобы остановить")),
+    state === "processing" && h("div", { style:{ textAlign:"center", padding:24 } },
+      h("div", { style:{ width:72, height:72, borderRadius:"50%", background:"rgba(96,165,250,0.15)", border:"1px solid rgba(96,165,250,0.3)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 12px", fontSize:28 } },
+        h("span", { style:{ animation:"pulse 1s infinite" } }, "🤖")),
+      h("div", { style:{ fontSize:13, color:"#93c5fd" } }, "AI расшифровывает и структурирует...")),
+    state === "done" && h("div", null,
+      h("div", { style:{ background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.15)", borderRadius:10, padding:14, marginBottom:14 } },
+        h("div", { style:{ fontSize:11, fontWeight:600, color:"#6ee7b7", marginBottom:8 } }, "✅ AI расшифровал и структурировал запись:"),
+        h("div", { style:{ background:"rgba(0,0,0,0.2)", borderRadius:6, padding:10, fontSize:12, color:"#94a3b8", lineHeight:1.6, marginBottom:10, fontStyle:"italic" } },
+          '"Мурат, пломба 14 зуб. Убрал кариес, полость средняя. Поставил пломбу композит A2, световая. Прикус проверил, всё хорошо. Контроль через 6 месяцев."'),
+        h("div", { style:{ fontSize:12, fontWeight:600, color:"#f8fafc", marginBottom:6 } }, "Структурированная запись:"),
+        [["Зуб","14"],["Диагноз","Кариес средний"],["Лечение","Пломба (композит A2, световая)"],["Прикус","Норма"],["Контроль","Через 6 мес"],["Рекомендации","Проф. чистка"]].map((r,i) =>
+          h("div", { key:i, style:{ display:"flex", justifyContent:"space-between", padding:"4px 0", borderBottom:i<5?"1px solid rgba(255,255,255,0.04)":"none", fontSize:12 } },
+            h("span", { style:{ color:"#64748b" } }, r[0]),
+            h("span", { style:{ color:"#e2e8f0", fontWeight:500 } }, r[1])))),
+      h("div", { style:{ background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:8, padding:10, marginBottom:12 } },
+        h("div", { style:{ fontSize:11, color:"#93c5fd", fontWeight:600, marginBottom:4 } }, "🤖 AI автоматически:"),
+        h("div", { style:{ fontSize:11, color:"#94a3b8", lineHeight:1.7 } }, "✅ Сохранил в историю болезни\n✅ Списал 1 шт Композит A2 со склада\n✅ Создал задачу: пригласить через 6 мес\n✅ Подготовил сводку для пациента")),
+      h("div", { style:{ display:"flex", gap:6 } },
+        h("div", { style:{ flex:1, textAlign:"center", padding:"8px", borderRadius:6, background:"rgba(16,185,129,0.1)", border:"1px solid rgba(16,185,129,0.15)", color:"#6ee7b7", fontSize:11, fontWeight:600, cursor:"pointer" } }, "📩 Отправить сводку"),
+        h("div", { style:{ flex:1, textAlign:"center", padding:"8px", borderRadius:6, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", color:"#94a3b8", fontSize:11, fontWeight:600, cursor:"pointer" } }, "✏️ Редактировать"),
+        h("div", { onClick:() => setState("ready"), style:{ flex:1, textAlign:"center", padding:"8px", borderRadius:6, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", color:"#94a3b8", fontSize:11, fontWeight:600, cursor:"pointer" } }, "🎤 Ещё запись"))));
+}
+
+function PanelLabOrders() {
+  const labs = [
+    { n:"Касымов Р.",  work:"Коронка ZrO₂ на 46",       lab:"DentLab Almaty", status:"Готово",     date:"06.03",          color:"#10b981", icon:"✅" },
+    { n:"Нурлан Б.",   work:"Слепок верх. челюсть",      lab:"DentLab Almaty", status:"В работе",   date:"10.03 (ожид.)",  color:"#f59e0b", icon:"⏳" },
+    { n:"Бекова Д.",   work:"Ретейнер",                  lab:"OrtoLab",        status:"Отправлено", date:"12.03 (ожид.)",  color:"#60a5fa", icon:"📦" }
+  ];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "🔬 Лабораторные работы"),
+    labs.map((l, i) =>
+      h("div", { key:i, style:{ padding:10, marginBottom:6, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4 } },
+          h("span", { style:{ fontSize:12, fontWeight:600, color:"#f8fafc" } }, l.n),
+          h("span", { style:{ fontSize:10, padding:"2px 6px", borderRadius:4, background:l.color+"18", color:l.color, fontWeight:600 } }, l.icon+" "+l.status)),
+        h("div", { style:{ fontSize:11, color:"#cbd5e1", marginBottom:2 } }, l.work),
+        h("div", { style:{ fontSize:10, color:"#64748b" } }, l.lab+" · "+l.date),
+        l.status === "Готово" && h("div", { style:{ marginTop:6, display:"flex", gap:6 } },
+          h("div", { style:{ fontSize:10, padding:"3px 8px", borderRadius:4, background:"rgba(16,185,129,0.1)", color:"#6ee7b7", cursor:"pointer", fontWeight:600 } }, "📅 Записать на примерку"),
+          h("div", { style:{ fontSize:10, padding:"3px 8px", borderRadius:4, background:"rgba(96,165,250,0.1)", color:"#93c5fd", cursor:"pointer", fontWeight:600 } }, "📩 Уведомить пациента")))),
+    h("div", { style:{ marginTop:10, padding:10, background:"rgba(244,114,182,0.06)", border:"1px solid rgba(244,114,182,0.12)", borderRadius:8, fontSize:11, color:"#f472b6", lineHeight:1.5 } },
+      "💡 Коронка для Касымова готова 2 дня. Пациент ещё не записан на примерку. Записать на ближайший свободный слот?"));
+}
+
+function PanelTreatmentPlan() {
+  const steps = [
+    { step:"1", name:"Консультация + КТ снимок",       price:"25 000 ₸",   status:"done" },
+    { step:"2", name:"Установка импланта (Straumann)", price:"350 000 ₸",  status:"done" },
+    { step:"3", name:"Контроль (3 мес)",               price:"Бесплатно",  status:"done" },
+    { step:"4", name:"Снятие слепков",                 price:"25 000 ₸",   status:"current" },
+    { step:"5", name:"Установка коронки ZrO₂",         price:"250 000 ₸",  status:"next" },
+    { step:"6", name:"Контроль (1 мес после)",         price:"Бесплатно",  status:"next" }
+  ];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 4px 0" } }, "📋 План лечения"),
+    h("div", { style:{ fontSize:13, fontWeight:600, color:"#e2e8f0", marginBottom:4 } }, "Касымов Руслан — Имплантация 46"),
+    h("div", { style:{ display:"flex", gap:12, marginBottom:14 } },
+      h("div", null, h("span", { style:{ fontSize:11, color:"#64748b" } }, "Итого: "), h("span", { style:{ fontSize:14, fontWeight:700, color:"#f8fafc" } }, "850 000 ₸")),
+      h("div", null, h("span", { style:{ fontSize:11, color:"#64748b" } }, "Оплачено: "), h("span", { style:{ fontSize:14, fontWeight:700, color:"#10b981" } }, "450 000 ₸")),
+      h("div", null, h("span", { style:{ fontSize:11, color:"#64748b" } }, "Остаток: "), h("span", { style:{ fontSize:14, fontWeight:700, color:"#f59e0b" } }, "400 000 ₸"))),
+    steps.map((s, i) =>
+      h("div", { key:i, style:{ display:"grid", gridTemplateColumns:"24px 1fr auto", gap:8, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", alignItems:"center" } },
+        h("div", { style:{ width:22, height:22, borderRadius:"50%", background:s.status==="done"?"#10b981":s.status==="current"?"#f59e0b":"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, color:s.status==="next"?"#475569":"#fff", fontWeight:700 } },
+          s.status==="done" ? "✓" : s.step),
+        h("div", { style:{ fontSize:12, fontWeight:s.status==="current"?700:400, color:s.status==="next"?"#64748b":"#e2e8f0" } }, s.name),
+        h("span", { style:{ fontSize:11, color:"#94a3b8" } }, s.price))),
+    h("div", { style:{ marginTop:12, padding:10, background:"rgba(244,114,182,0.06)", border:"1px solid rgba(244,114,182,0.12)", borderRadius:8, fontSize:11, color:"#f472b6", lineHeight:1.5 } },
+      "💡 Слепки сняты. Коронка в лаборатории — готова. Следующий шаг: примерка и установка. Записать пациента?"));
+}
+
+function PanelRevenue() {
+  const d = [{d:"Пн",a:820,t:900},{d:"Вт",a:1150,t:900},{d:"Ср",a:740,t:900},{d:"Чт",a:980,t:900},{d:"Пт",a:1280,t:900},{d:"Сб",a:560,t:500}];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 4px 0" } }, "📊 Выручка — Эта неделя"),
+    h("div", { style:{ display:"flex", gap:16, marginBottom:16 } },
+      h("div", null, h("span", { style:{ fontSize:22, fontWeight:800, color:"#10b981" } }, "5.53M ₸"), h("span", { style:{ fontSize:11, color:"#94a3b8", marginLeft:4 } }, "факт")),
+      h("div", null, h("span", { style:{ fontSize:22, fontWeight:800, color:"#475569" } }, "5.5M ₸"), h("span", { style:{ fontSize:11, color:"#94a3b8", marginLeft:4 } }, "план"))),
+    h("div", { style:{ display:"flex", gap:5, alignItems:"flex-end", height:130, marginBottom:8 } },
+      d.map((v, i) =>
+        h("div", { key:i, style:{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3 } },
+          h("div", { style:{ fontSize:9, color:"#94a3b8", fontWeight:600 } }, v.a+"k"),
+          h("div", { style:{ width:"100%", display:"flex", gap:2, alignItems:"flex-end", height:100 } },
+            h("div", { style:{ flex:1, height:(v.a/1280*100)+"%", background:v.a>=v.t?"linear-gradient(to top,#10b981,#34d399)":"linear-gradient(to top,#f59e0b,#fbbf24)", borderRadius:"3px 3px 0 0" } }),
+            h("div", { style:{ flex:1, height:(v.t/1280*100)+"%", background:"rgba(255,255,255,0.08)", borderRadius:"3px 3px 0 0" } })),
+          h("div", { style:{ fontSize:10, color:"#64748b", fontWeight:600 } }, v.d)))),
+    h("div", { style:{ marginTop:12, padding:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:8 } },
+      h("div", { style:{ fontSize:11, color:"#93c5fd", fontWeight:600, marginBottom:3 } }, "💡 Прогноз"),
+      h("div", { style:{ fontSize:11, color:"#94a3b8", lineHeight:1.5 } }, "Следующая неделя: ~5.8M ₸. Заполните 4 слота → +320k ₸.")));
+}
+
+function PanelBooking() {
+  const rows = [["Пациент","Касымова Айгуль"],["Услуга","Проф. чистка"],["Врач","Хасанов Д.Р."],["Дата","Четверг, 7 марта"],["Время","14:00 — 15:00"],["Кресло","Кресло 2 (авто)"]];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "✅ Запись создана"),
+    h("div", { style:{ background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.2)", borderRadius:10, padding:14 } },
+      rows.map((r, i) =>
+        h("div", { key:i, style:{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:i<5?"1px solid rgba(255,255,255,0.04)":"none", fontSize:12 } },
+          h("span", { style:{ color:"#64748b" } }, r[0]),
+          h("span", { style:{ color:"#e2e8f0", fontWeight:500 } }, r[1])))));
+}
+
+function PanelReschedule() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "🔄 Перенесена"),
+    h("div", { style:{ background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.15)", borderRadius:10, padding:14 } },
+      h("div", { style:{ display:"flex", alignItems:"center", gap:12, marginBottom:12 } },
+        h("div", { style:{ textAlign:"center" } },
+          h("div", { style:{ fontSize:10, color:"#64748b" } }, "Было"),
+          h("div", { style:{ fontSize:14, fontWeight:700, color:"#f87171", textDecoration:"line-through" } }, "10:00")),
+        h("div", { style:{ fontSize:18, color:"#475569" } }, "→"),
+        h("div", { style:{ textAlign:"center" } },
+          h("div", { style:{ fontSize:10, color:"#64748b" } }, "Стало"),
+          h("div", { style:{ fontSize:14, fontWeight:700, color:"#10b981" } }, "13:00"))),
+      [["Пациент","Мурат С."],["Услуга","Пломба 14"],["Врач","Хасанов Д.Р."]].map((r, i) =>
+        h("div", { key:i, style:{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:i<2?"1px solid rgba(255,255,255,0.04)":"none", fontSize:12 } },
+          h("span", { style:{ color:"#64748b" } }, r[0]),
+          h("span", { style:{ color:"#e2e8f0" } }, r[1])))),
+    h("div", { style:{ marginTop:10, padding:10, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.15)", borderRadius:8, fontSize:11, color:"#6ee7b7" } },
+      "✅ Уведомление отправлено"));
+}
+
+function PanelMessage() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "💬 Отправлено"),
+    h("div", { style:{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10, padding:14 } },
+      h("div", { style:{ fontSize:12, color:"#64748b", marginBottom:8 } }, "Кому: Айтымова К. · WhatsApp"),
+      h("div", { style:{ background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.12)", borderRadius:8, padding:10, fontSize:12, color:"#cbd5e1", lineHeight:1.6 } },
+        '"Подтверждаем запись на завтра 09:00. Врач: Хасанов. Ждём! 😊"')),
+    h("div", { style:{ marginTop:8, fontSize:11, color:"#10b981" } }, "✅ Доставлено · Прочитано"));
+}
+
+function PanelMissedCalls() {
+  const calls = [{t:"Вчера 17:42",ph:"+7 707 555-12-34",p:"Неизвестный"},{t:"Вчера 14:15",ph:"+7 701 888-45-67",p:"Бекова Д."}];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "📞 Пропущенные"),
+    calls.map((c, i) =>
+      h("div", { key:i, style:{ padding:10, marginBottom:6, background:"rgba(239,68,68,0.05)", border:"1px solid rgba(239,68,68,0.15)", borderRadius:8 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4 } },
+          h("span", { style:{ fontSize:12, fontWeight:600, color:"#f8fafc" } }, c.p),
+          h("span", { style:{ fontSize:10, color:"#f87171", fontWeight:600 } }, "Не перезвонили")),
+        h("div", { style:{ fontSize:11, color:"#64748b" } }, c.ph+" · "+c.t),
+        h("div", { style:{ display:"flex", gap:6, marginTop:6 } },
+          h("div", { style:{ fontSize:10, padding:"3px 8px", borderRadius:4, background:"rgba(96,165,250,0.1)", color:"#93c5fd", cursor:"pointer", fontWeight:600 } }, "📞 Перезвонить"),
+          h("div", { style:{ fontSize:10, padding:"3px 8px", borderRadius:4, background:"rgba(16,185,129,0.1)", color:"#6ee7b7", cursor:"pointer", fontWeight:600 } }, "💬 WhatsApp")))));
+}
+
+function PanelMaterials() {
+  const mats = [{n:"Композит A2",s:3,m:5,d:"~4 дня",ur:true},{n:"Убистезин",s:8,m:10,d:"~6 дней",ur:true},{n:"Перчатки M",s:12,m:20,d:"~3 дня",ur:true},{n:"Бор алмазный",s:6,m:5,d:"~10 дней",ur:false}];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "📦 Материалы"),
+    mats.map((m, i) =>
+      h("div", { key:i, style:{ padding:"9px 10px", marginBottom:5, background:m.ur?"rgba(239,68,68,0.05)":"rgba(255,255,255,0.02)", border:"1px solid "+(m.ur?"rgba(239,68,68,0.15)":"rgba(255,255,255,0.06)"), borderRadius:8 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:3 } },
+          h("span", { style:{ fontSize:12, fontWeight:600, color:"#f8fafc" } }, m.n),
+          h("span", { style:{ fontSize:11, fontWeight:700, color:m.ur?"#f87171":"#10b981" } }, m.s+" шт")),
+        h("div", { style:{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#64748b" } },
+          h("span", null, "Мин: "+m.m),
+          h("span", { style:{ color:m.ur?"#fca5a5":"#94a3b8" } }, "Хватит на "+m.d)),
+        h("div", { style:{ height:3, background:"rgba(255,255,255,0.06)", borderRadius:2, marginTop:5 } },
+          h("div", { style:{ height:"100%", width:Math.min(100,m.s/m.m*100)+"%", background:m.ur?"#ef4444":"#10b981", borderRadius:2 } })))));
+}
+
+function PanelInvites() {
+  const pts = [{n:"Мухтаров К.",a:"12 мес",ne:"Чистка",ri:"Крит."},{n:"Касымов Б.",a:"8 мес",ne:"Осмотр",ri:"Высок."},{n:"Серикова А.",a:"6 мес",ne:"Чистка",ri:"Высок."}];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 4px 0" } }, "🔔 Пригласить"),
+    h("div", { style:{ fontSize:11, color:"#94a3b8", marginBottom:12 } }, "47 пациентов. Топ-3:"),
+    pts.map((p, i) =>
+      h("div", { key:i, style:{ padding:"8px 10px", marginBottom:5, background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:3 } },
+          h("span", { style:{ fontSize:12, fontWeight:600, color:"#f8fafc" } }, p.n),
+          h("span", { style:{ fontSize:9, padding:"2px 5px", borderRadius:3, fontWeight:600, background:p.ri==="Крит."?"rgba(239,68,68,0.15)":"rgba(245,158,11,0.15)", color:p.ri==="Крит."?"#f87171":"#fcd34d" } }, p.ri)),
+        h("div", { style:{ fontSize:10, color:"#64748b" } }, p.a+" назад · "+p.ne))),
+    h("div", { style:{ marginTop:8, textAlign:"center", padding:8, borderRadius:8, background:"linear-gradient(135deg,rgba(16,185,129,0.15),rgba(96,165,250,0.15))", border:"1px solid rgba(16,185,129,0.25)", color:"#6ee7b7", fontSize:12, fontWeight:700, cursor:"pointer" } },
+      "Пригласить всех"));
+}
+
+function PanelSalary() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "💰 Зарплата"),
+    [{n:"Хасанов",rv:"2.4M",s:"600k ₸"},{n:"Аканова",rv:"1.8M",s:"450k ₸"},{n:"Лайчинов",rv:"1.1M",s:"220k ₸"}].map((d, i) =>
+      h("div", { key:i, style:{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:13 } },
+        h("span", { style:{ color:"#e2e8f0" } }, d.n+" ("+d.rv+" ₸)"),
+        h("span", { style:{ color:"#10b981", fontWeight:700 } }, d.s))));
+}
+
+function PanelPromo() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "🎯 Акция: Чистка -20%"),
+    h("div", { style:{ background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.15)", borderRadius:10, padding:14, marginBottom:12 } },
+      [["Аудитория","Чистка > 5 мес назад"],["Найдено","34 пациента"],["Канал","WhatsApp + SMS"]].map((r, i) =>
+        h("div", { key:i, style:{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:i<2?"1px solid rgba(255,255,255,0.04)":"none", fontSize:12 } },
+          h("span", { style:{ color:"#64748b" } }, r[0]),
+          h("span", { style:{ color:"#e2e8f0" } }, r[1])))),
+    h("div", { style:{ textAlign:"center", padding:9, borderRadius:8, background:"linear-gradient(135deg,rgba(16,185,129,0.15),rgba(96,165,250,0.15))", color:"#6ee7b7", fontSize:12, fontWeight:700, cursor:"pointer" } }, "🚀 Запустить"));
+}
+
+function PanelAdmins() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "📊 Администраторы"),
+    [{n:"Куанишпаева Д.",cv:"82%",m:1,r:"4.8",w:false},{n:"Бримжанова А.",cv:"64%",m:5,r:"4.2",w:true}].map((a, i) =>
+      h("div", { key:i, style:{ padding:10, marginBottom:6, background:a.w?"rgba(245,158,11,0.05)":"rgba(255,255,255,0.02)", border:"1px solid "+(a.w?"rgba(245,158,11,0.15)":"rgba(255,255,255,0.06)"), borderRadius:8 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 } },
+          h("span", { style:{ fontWeight:600, color:"#f8fafc" } }, a.n),
+          h("span", null, "⭐ "+a.r)),
+        h("div", { style:{ fontSize:11, color:"#94a3b8" } }, "Конверсия: "+a.cv+" · Пропущено: "+a.m),
+        a.w && h("div", { style:{ marginTop:4, fontSize:11, color:"#fcd34d" } }, "⚠ 3 пациента без перезвона"))));
+}
+
+function PanelSources() {
+  const srcs = [{n:"Instagram",c:"8",cv:"38%",b:80,cl:"#e879f9"},{n:"Рекомендации",c:"4",cv:"75%",b:60,cl:"#10b981"},{n:"WhatsApp бот",c:"6",cv:"50%",b:55,cl:"#60a5fa"}];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "📈 Источники"),
+    srcs.map((s, i) =>
+      h("div", { key:i, style:{ marginBottom:10 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:3, fontSize:12 } },
+          h("span", { style:{ fontWeight:600, color:"#f8fafc" } }, s.n),
+          h("span", { style:{ color:"#94a3b8" } }, s.c+" пац · "+s.cv)),
+        h("div", { style:{ height:6, background:"rgba(255,255,255,0.06)", borderRadius:3 } },
+          h("div", { style:{ height:"100%", width:s.b+"%", background:s.cl, borderRadius:3 } })))));
+}
+
+function PanelCampaign() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "📬 Рассылка"),
+    h("div", { style:{ background:"rgba(255,255,255,0.03)", borderRadius:10, padding:14 } },
+      h("div", { style:{ fontSize:13, fontWeight:600, color:"#e2e8f0", marginBottom:8 } }, '"Чистка -20%" · 1 марта'),
+      h("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 } },
+        [["Отпр.","128"],["Откр.","45%"],["Запис.","12%"],["Выр.","375k"]].map((v, i) =>
+          h("div", { key:i, style:{ textAlign:"center", background:"rgba(0,0,0,0.2)", borderRadius:6, padding:"5px 3px" } },
+            h("div", { style:{ fontSize:9, color:"#64748b" } }, v[0]),
+            h("div", { style:{ fontSize:12, fontWeight:700, color:"#f8fafc" } }, v[1]))))));
+}
+
+function PanelReviews() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "⭐ Отзывы · 4.7 (9)"),
+    [{n:"Касымова",r:5,t:"Отличный врач!",neg:false},{n:"Мухтарова",r:2,t:"Ждала 40 минут",neg:true}].map((r, i) =>
+      h("div", { key:i, style:{ padding:10, marginBottom:6, background:r.neg?"rgba(239,68,68,0.05)":"rgba(255,255,255,0.02)", border:"1px solid "+(r.neg?"rgba(239,68,68,0.15)":"rgba(255,255,255,0.06)"), borderRadius:8 } },
+        h("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:12 } },
+          h("span", { style:{ fontWeight:600, color:"#f8fafc" } }, r.n),
+          h("span", { style:{ color:"#fcd34d" } }, "⭐".repeat(r.r))),
+        h("div", { style:{ fontSize:12, color:"#cbd5e1" } }, '"'+r.t+'"'))));
+}
+
+function PanelCancellations() {
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "📉 Отмены: 12 · Неявки: 7"),
+    h("div", { style:{ fontSize:12, color:"#94a3b8", marginBottom:8 } }, "Главная причина: неудобное время (5/12)"),
+    h("div", { style:{ padding:10, background:"rgba(96,165,250,0.06)", border:"1px solid rgba(96,165,250,0.12)", borderRadius:8, fontSize:11, color:"#93c5fd", lineHeight:1.5 } },
+      "💡 Предлагать 3 альтернативных слота → сохраняет 60%."));
+}
+
+const PANEL_MAP = {
+  schedule: PanelSchedule, patient: PanelPatient, voiceNote: PanelVoiceNote,
+  labOrders: PanelLabOrders, treatmentPlan: PanelTreatmentPlan, revenue: PanelRevenue,
+  booking: PanelBooking, reschedule: PanelReschedule, message: PanelMessage,
+  missedCalls: PanelMissedCalls, materials: PanelMaterials, invites: PanelInvites,
+  salary: PanelSalary, promo: PanelPromo, admins: PanelAdmins, sources: PanelSources,
+  campaignResults: PanelCampaign, reviews: PanelReviews, cancellations: PanelCancellations
+};
+
+const CONVOS = {
+  director: {
+    "Покажи расписание на завтра":           { text:"Завтра у Хасанова 6 пациентов и 2 свободных слота.\n\n⚠️ Серикова в 11:00 — 78% риск неявки.\n\n3 пациента в листе ожидания. Пригласить?", panel:"schedule" },
+    "Какая выручка за эту неделю?":          { text:"**5.53M ₸** при плане 5.5M ₸ — на 0.5% выше! 👏\n\nЛучший день — пятница (1.28M ₸).\nПрогноз: ~5.8M ₸. +4 слота → +320k ₸.", panel:"revenue" },
+    "Найди пациента Серикова":               { text:"**Серикова Айгуль Маратовна**\n\n⚠️ Риск оттока. 6 мес без визита. Есть 4 870 ₸ бонусов.\nПригласить на чистку?", panel:"patient" },
+    "Покажи материалы с низким остатком":    { text:"⚠️ 3 ниже минимума:\n• **Композит A2** — 3 шт, ~4 дня\n• **Убистезин** — 8 карп, ~6 дней\n• **Перчатки M** — 12 пар, ~3 дня", panel:"materials" },
+    "Кто из пациентов давно не был?":        { text:"**47 пациентов** просрочили цикл.\n\n🔴 Мухтаров — 12 мес\n🟡 Касымов — 8 мес\n🟡 Серикова — 6 мес\n\nОтправить приглашения?", panel:"invites" },
+    "Покажи зарплату врачей за этот месяц": { text:"Зарплата за март:\n\n👨‍⚕️ **Хасанов** — 600k ₸\n👩‍⚕️ **Аканова** — 450k ₸\n👨‍⚕️ **Лайчинов** — 220k ₸\n\nОбщий ФОТ: 1.27M ₸", panel:"salary" }
+  },
+  receptionist: {
+    "Покажи расписание на сегодня":                                               { text:"6 пациентов + 2 свободных (12:00, 15:00).\nПервый — Айтымова 09:00.\n⚠️ Серикова 11:00 — позвоните за час.\n3 заявки из WhatsApp.", panel:"schedule" },
+    "Запиши Касымову Айгуль на чистку к Хасанову на четверг в 14:00":            { text:"✅ Касымова записана:\n📅 Чт, 7 марта, 14:00 · Хасанов · Кресло 2\nНапоминание за 24ч.", panel:"booking" },
+    "Перенеси Мурата с 10:00 на 13:00":                                           { text:"✅ Мурат: 10:00 → **13:00**\nУведомление отправлено. Слот 10:00 свободен.", panel:"reschedule" },
+    "Найди пациента по номеру 707 123 45 67":                                     { text:"**Серикова Айгуль**\n📞 +7 707 123-45-67 · 12 визитов\n⚠️ 6 мес без визита. Предложите чистку с бонусами.", panel:"patient" },
+    "Напиши Айтымовой что её запись подтверждена на завтра 09:00":                { text:"✅ WhatsApp отправлен.\n\"Подтверждаем запись на завтра 09:00. Ждём! 😊\"\nДоставлено, прочитано.", panel:"message" },
+    "Покажи пропущенные звонки":                                                  { text:"📞 2 без перезвона:\n1. **Неизвестный** — вчера 17:42 (AI отправил WhatsApp)\n2. **Бекова Д.** — вчера 14:15\nПерезвонить?", panel:"missedCalls" }
+  },
+  doctor: {
+    "Кто у меня сегодня?":                                         { text:"Сегодня 7 пациентов:\n\n09:00 — Айтымова (чистка)\n10:00 — **Мурат С.** (пломба 14)\n11:00 — **Серикова А.** (осмотр) ⚠️ Аллергия на лидокаин!\n13:00 — Касымов Р. 🔬 Лаб работа готова!\n14:00 — Нурлан Б. (слепки)\n15:30 — Бекова Д. (брекеты)\n\nПодготовить подробности?", panel:"schedule" },
+    "Записать голосовую заметку по пациенту Мурат С.":             { text:"🎤 Готово, открыла панель записи для **Мурата С.**\n\nНажмите кнопку микрофона и надиктуйте заметки. AI автоматически расшифрует, сохранит в историю и спишет материалы.", panel:"voiceNote" },
+    "Открой карту пациента Серикова":                              { text:"**Серикова Айгуль Маратовна**, 33 года\n\n⚠️ **Аллергия: лидокаин** → использовать артикаин\n⚠️ Гипертония (контролируемая)\n🦷 Последний снимок: кариес 36 (сентябрь)\n\n12 визитов, последний 6 мес назад.", panel:"patient" },
+    "Есть ли композит A2 на складе?":                             { text:"📦 **Композит A2: 3 шт** (склад 1)\n\n⚠️ Ниже минимума (5 шт). Хватит на ~2 дня.\n\nНа сегодня хватит. Завтра нужно заказать.\n\nСообщить администратору?", panel:"materials" },
+    "Покажи статус лабораторных работ":                           { text:"🔬 Ваши лабораторные работы:\n\n✅ **Касымов Р.** — коронка ZrO₂ — **ГОТОВА** (лежит 2 дня!)\n⏳ **Нурлан Б.** — в работе, ожид. 10.03\n📦 **Бекова Д.** — отправлено, ожид. 12.03\n\nЗаписать Касымова на примерку?", panel:"labOrders" },
+    "Покажи план лечения Касымова":                               { text:"📋 **Касымов Руслан** — Имплантация 46\n\nПрогресс: 4 из 6 этапов ✅\nОплачено: 450k из 850k ₸ (остаток 400k ₸)\n\nСледующий: установка коронки — уже готова в лаборатории!", panel:"treatmentPlan" }
+  },
+  supervisor: {
+    "Хочу запустить акцию на чистку со скидкой 20%":       { text:"AI подготовил:\n🎯 34 пациента (чистка > 5 мес)\n📱 WhatsApp + SMS, персональные\n\nЗапустить?", panel:"promo" },
+    "Покажи эффективность администраторов за неделю":       { text:"✅ **Куанишпаева** — 82%, рейтинг 4.8\n⚠️ **Бримжанова** — 64%, 5 пропусков\n\n3 пациента без перезвона вчера.", panel:"admins" },
+    "Откуда приходят новые пациенты?":                      { text:"📸 Instagram — 8 (38%)\n🗣 Рекомендации — 4 (**75%** конверсия!)\n🤖 WhatsApp бот — 6 (50%)\n\n💡 Запустить реферальную программу?", panel:"sources" },
+    "Как отработала последняя рассылка?":                   { text:"\"Чистка -20%\": 128 отпр. · 45% откр. · **12% записались**\n💰 375k ₸ выручки\n\nЛучший сегмент: не были > 6 мес (18%).", panel:"campaignResults" },
+    "Покажи отзывы за эту неделю":                          { text:"⭐ 9 отзывов, средняя **4.7**\n\n❌ 1 негативный: Мухтарова — ждала 40 мин\n\n💡 Автоуведомлять при задержке > 15 мин?", panel:"reviews" },
+    "Статистика по отменам и неявкам":                      { text:"❌ Отмены: **12** (6.5%) · 👻 Неявки: **7** (3.8%)\n\nПричина №1: неудобное время.\n💡 Предлагать альтернативы → -60% отмен.", panel:"cancellations" }
+  }
+};
+
+function App() {
+  const [role, setRole]               = useState("director");
+  const [messages, setMessages]       = useState([]);
+  const [input, setInput]             = useState("");
+  const [activePanel, setActivePanel] = useState(null);
+  const [typing, setTyping]           = useState(false);
+  const [showPanel, setShowPanel]     = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    const r = ROLES.find(r => r.id === role);
+    setMessages([{ role:"assistant", text:r.greeting }]);
+    setActivePanel(null);
+    setShowPanel(false);
+  }, [role]);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  const send = (text) => {
+    const q = text || input;
+    if (!q.trim()) return;
+    setInput("");
+    setMessages(p => [...p, { role:"user", text:q }]);
+    setTyping(true);
+    setActivePanel(null);
+    setShowPanel(false);
+    const convo = CONVOS[role]?.[q];
+    setTimeout(() => {
+      setTyping(false);
+      if (convo) {
+        setMessages(p => [...p, { role:"assistant", text:convo.text }]);
+        if (convo.panel) setTimeout(() => { setActivePanel(convo.panel); setShowPanel(true); }, 250);
+      } else {
+        setMessages(p => [...p, { role:"assistant", text:"Обрабатываю... (в реальной версии AI ответит на любой вопрос)" }]);
+      }
+    }, 700 + Math.random()*500);
+  };
+
+  const cur = ROLES.find(r => r.id === role);
+  const PanelComp = activePanel && PANEL_MAP[activePanel];
+
+  return h("div", { style:{ height:"100vh", display:"flex", flexDirection:"column" } },
+
+    // ── Safe area spacer for status bar ──
+    h("div", { style:{ background:"#0a0a0f", paddingTop:"env(safe-area-inset-top)", flexShrink:0 } }),
+
+    // ── Role bar ──
+    h("div", { style:{ padding:"10px 12px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", gap:6, background:"rgba(10,10,15,0.98)", flexShrink:0, overflowX:"auto", WebkitOverflowScrolling:"touch" } },
+      h("span", { style:{ fontSize:11, color:"#475569", marginRight:2, flexShrink:0 } }, "Роль:"),
+      ROLES.map(r =>
+        h("button", { key:r.id, onClick:() => setRole(r.id), style:{ padding:"5px 10px", borderRadius:6, border:role===r.id?"1px solid "+r.color:"1px solid #1e293b", background:role===r.id?r.color+"18":"transparent", color:role===r.id?r.color:"#64748b", fontSize:11, fontWeight:role===r.id?700:500, cursor:"pointer", transition:"all 0.2s", flexShrink:0, whiteSpace:"nowrap" } },
+          r.icon+" "+r.label))),
+
+    h("div", { style:{ flex:1, display:"flex", overflow:"hidden", position:"relative" } },
+
+      // ── Chat column ──
+      h("div", { style:{ flex:1, display:"flex", flexDirection:"column", minWidth:0 } },
+
+        // header
+        h("div", { style:{ padding:"10px 16px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", gap:8, flexShrink:0 } },
+          h("div", { style:{ width:30, height:30, borderRadius:7, background:"linear-gradient(135deg,"+cur.color+","+cur.color+"88)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13 } }, "🦷"),
+          h("div", null,
+            h("div", { style:{ fontSize:13, fontWeight:700, color:"#f8fafc" } }, "Dental AI OS"),
+            h("div", { style:{ fontSize:10, color:"#10b981" } }, "● "+cur.label))),
+
+        // messages
+        h("div", { style:{ flex:1, overflow:"auto", padding:"12px 16px" } },
+          messages.map((m, i) =>
+            h("div", { key:i, style:{ marginBottom:12, display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start" } },
+              h("div", { style:{ maxWidth:"82%", padding:"9px 13px", borderRadius:11, background:m.role==="user"?cur.color+"20":"rgba(255,255,255,0.04)", border:"1px solid "+(m.role==="user"?cur.color+"35":"rgba(255,255,255,0.06)"), fontSize:13, lineHeight:1.65, color:"#e2e8f0", whiteSpace:"pre-line" } },
+                m.text.split("**").map((p, j) => j%2===1 ? h("strong", { key:j, style:{ color:"#f8fafc" } }, p) : p)))),
+          typing && h("div", { style:{ marginBottom:12 } },
+            h("div", { style:{ display:"inline-block", padding:"9px 13px", borderRadius:11, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.06)", fontSize:13, color:"#64748b" } },
+              h("span", { style:{ animation:"pulse 1.5s infinite" } }, "Думаю..."))),
+          h("div", { ref:endRef })),
+
+        // scenario chips
+        h("div", { style:{ padding:"6px 16px 4px", display:"flex", gap:5, flexWrap:"wrap", flexShrink:0 } },
+          (SCENARIOS[role]||[]).map((s, i) =>
+            h("button", { key:i, onClick:() => send(s.prompt), style:{ padding:"4px 9px", borderRadius:5, border:"1px solid #1e293b", background:"rgba(255,255,255,0.02)", color:"#94a3b8", fontSize:10, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" } },
+              s.label))),
+
+        // input bar
+        h("div", { style:{ padding:"8px 16px", paddingBottom:"max(10px, env(safe-area-inset-bottom))", borderTop:"1px solid #1e293b", flexShrink:0 } },
+          h("div", { style:{ display:"flex", gap:6 } },
+            h("input", { value:input, onChange:e => setInput(e.target.value), onKeyDown:e => e.key==="Enter" && send(), placeholder:"Спросите что угодно...", style:{ flex:1, padding:"9px 12px", borderRadius:8, border:"1px solid #1e293b", background:"rgba(255,255,255,0.03)", color:"#e2e8f0", fontSize:13, outline:"none" } }),
+            h("button", { onClick:() => send(), style:{ padding:"9px 14px", borderRadius:8, border:"none", background:"linear-gradient(135deg,"+cur.color+","+cur.color+"aa)", color:"#0a0a0f", fontSize:13, fontWeight:700, cursor:"pointer" } }, "↑")))),
+
+      // ── Side panel (desktop: sidebar, mobile: overlay) ──
+      PanelComp && h("div", { style:{ width: isMobile ? "100%" : 380, background:"#0f1019", borderLeft: isMobile ? "none" : "1px solid #1e293b", display:"flex", flexDirection:"column", animation:"slideIn 0.25s ease", flexShrink:0, position: isMobile ? "absolute" : "relative", top:0, right:0, bottom:0, zIndex:10 } },
+        h("div", { style:{ padding:"8px 14px", borderBottom:"1px solid #1e293b", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 } },
+          h("span", { style:{ fontSize:10, color:"#64748b", fontWeight:600, textTransform:"uppercase", letterSpacing:1 } }, "Панель"),
+          h("button", { onClick:() => setActivePanel(null), style:{ background:"none", border:"none", color:"#475569", fontSize:15, cursor:"pointer", padding:"4px 8px" } }, "✕")),
+        h("div", { style:{ flex:1, overflow:"auto", padding:14 } },
+          h(PanelComp, { role })))));
+}
+
+ReactDOM.render(h(App, null), document.getElementById("root"));
+</script>
+</body>
+</html>
