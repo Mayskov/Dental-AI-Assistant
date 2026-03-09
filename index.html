@@ -9,14 +9,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html{padding-top:env(safe-area-inset-top);zoom:2}
+html{padding-top:env(safe-area-inset-top);zoom:2;--zoom:2}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e2e8f0;overflow:hidden}
 input::placeholder{color:#475569}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 @keyframes recording{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)}50%{box-shadow:0 0 0 12px rgba(239,68,68,0)}}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:3px}
-@media(max-width:768px){html{zoom:1.35;-webkit-text-size-adjust:135%}}
+@media(max-width:768px){html{zoom:1.35;--zoom:1.35;-webkit-text-size-adjust:135%}}
 </style>
 </head>
 <body>
@@ -477,7 +477,7 @@ function App() {
   const cur = ROLES.find(r => r.id === role);
   const PanelComp = activePanel && PANEL_MAP[activePanel];
 
-  return h("div", { style:{ height:"100vh", display:"flex", flexDirection:"column" } },
+  return h("div", { style:{ height:"calc(100vh / var(--zoom))", display:"flex", flexDirection:"column" } },
 
     // ── Safe area spacer for status bar ──
     h("div", { style:{ background:"#0a0a0f", paddingTop:"calc(env(safe-area-inset-top) + 20px)", flexShrink:0 } }),
