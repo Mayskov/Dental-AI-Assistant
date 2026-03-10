@@ -454,6 +454,17 @@ function App() {
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
+  const [vh, setVh] = useState(window.innerHeight);
+  useEffect(() => {
+    const onResize = () => setVh(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    window.visualViewport && window.visualViewport.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport && window.visualViewport.removeEventListener("resize", onResize);
+    };
+  }, []);
+
   const send = (text) => {
     const q = text || input;
     if (!q.trim()) return;
@@ -477,7 +488,7 @@ function App() {
   const cur = ROLES.find(r => r.id === role);
   const PanelComp = activePanel && PANEL_MAP[activePanel];
 
-  return h("div", { style:{ height:"calc(100vh / var(--zoom))", display:"flex", flexDirection:"column" } },
+  return h("div", { style:{ height: (vh / (isMobile ? 1.35 : 2)) + "px", display:"flex", flexDirection:"column" } },
 
     // ── Safe area spacer for status bar ──
     h("div", { style:{ background:"#0a0a0f", paddingTop:"calc(env(safe-area-inset-top) + 20px)", flexShrink:0 } }),
