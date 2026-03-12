@@ -34,7 +34,7 @@ const ROLES = [
 ];
 
 const SCENARIOS = {
-  director:     [ {label:"📅 Расписание",prompt:"Покажи расписание на завтра"}, {label:"📊 Выручка",prompt:"Какая выручка за эту неделю?"}, {label:"👤 Пациент",prompt:"Найди пациента Серикова"}, {label:"📦 Склад",prompt:"Покажи материалы с низким остатком"}, {label:"🔔 Пригласить",prompt:"Кто из пациентов давно не был?"}, {label:"💰 Зарплата",prompt:"Покажи зарплату врачей за этот месяц"} ],
+  director:     [ {label:"📅 Расписание",prompt:"Покажи расписание на завтра"}, {label:"📊 Выручка",prompt:"Какая выручка за эту неделю?"}, {label:"📈 Прогноз выручки",prompt:"Покажи прогноз выручки"}, {label:"👤 Пациент",prompt:"Найди пациента Серикова"}, {label:"📦 Склад",prompt:"Покажи материалы с низким остатком"}, {label:"🔔 Пригласить",prompt:"Кто из пациентов давно не был?"}, {label:"💰 Зарплата",prompt:"Покажи зарплату врачей за этот месяц"} ],
   receptionist: [ {label:"📅 Расписание",prompt:"Покажи расписание на сегодня"}, {label:"📝 Записать",prompt:"Запиши Касымову Айгуль на чистку к Хасанову на четверг в 14:00"}, {label:"🔄 Перенести",prompt:"Перенеси Мурата с 10:00 на 13:00"}, {label:"👤 Пациент",prompt:"Найди пациента по номеру 707 123 45 67"}, {label:"💬 Сообщение",prompt:"Напиши Айтымовой что её запись подтверждена на завтра 09:00"}, {label:"📞 Звонки",prompt:"Покажи пропущенные звонки"} ],
   doctor:       [ {label:"📅 Мои пациенты",prompt:"Кто у меня сегодня?"}, {label:"🎤 Голосовая заметка",prompt:"Записать голосовую заметку по пациенту Мурат С."}, {label:"👤 Карта пациента",prompt:"Открой карту пациента Серикова"}, {label:"📦 Есть композит?",prompt:"Есть ли композит A2 на складе?"}, {label:"🔬 Лаб. работы",prompt:"Покажи статус лабораторных работ"}, {label:"📋 План лечения",prompt:"Покажи план лечения Касымова"} ],
   supervisor:   [ {label:"🎯 Акция",prompt:"Хочу запустить акцию на чистку со скидкой 20%"}, {label:"📊 Админы",prompt:"Покажи эффективность администраторов за неделю"}, {label:"📈 Источники",prompt:"Откуда приходят новые пациенты?"}, {label:"💬 Рассылка",prompt:"Как отработала последняя рассылка?"}, {label:"⭐ Отзывы",prompt:"Покажи отзывы за эту неделю"}, {label:"📉 Отмены",prompt:"Статистика по отменам и неявкам"} ]
@@ -323,6 +323,41 @@ function PanelSalary() {
         h("span", { style:{ color:"#10b981", fontWeight:700 } }, d.s))));
 }
 
+function PanelRevenueForecast() {
+  const weeks = [
+    [{ d:"Пн", busy:true }, { d:"Вт", busy:true }, { d:"Ср", busy:true }, { d:"Чт", busy:false }, { d:"Пт", busy:true }, { d:"Сб", busy:true }, { d:"Вс", busy:false }],
+    [{ d:"Пн", busy:true }, { d:"Вт", busy:false }, { d:"Ср", busy:true }, { d:"Чт", busy:true }, { d:"Пт", busy:true }, { d:"Сб", busy:false }, { d:"Вс", busy:false }],
+    [{ d:"Пн", busy:true }, { d:"Вт", busy:true }, { d:"Ср", busy:false }, { d:"Чт", busy:false }, { d:"Пт", busy:true }, { d:"Сб", busy:true }, { d:"Вс", busy:false }],
+    [{ d:"Пн", busy:false }, { d:"Вт", busy:true }, { d:"Ср", busy:false }, { d:"Чт", busy:true }, { d:"Пт", busy:false }, { d:"Сб", busy:false }, { d:"Вс", busy:false }]
+  ];
+  const dayLabels = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+  return h("div", null,
+    h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 4px 0" } }, "📈 Прогноз выручки"),
+    h("div", { style:{ fontSize:11, color:"#94a3b8", marginBottom:12 } }, "До конца месяца — загрузка кресел"),
+    h("div", { style:{ display:"flex", gap:4, marginBottom:8 } },
+      dayLabels.map((d, i) =>
+        h("div", { key:i, style:{ flex:1, textAlign:"center", fontSize:9, color:"#64748b", fontWeight:600 } }, d))),
+    weeks.map((week, wi) =>
+      h("div", { key:wi, style:{ display:"flex", gap:4, marginBottom:4 } },
+        week.map((day, di) =>
+          h("div", { key:di, style:{ flex:1, aspectRatio:"1", borderRadius:6, background:day.busy ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.25)", border:"1px solid " + (day.busy ? "rgba(16,185,129,0.4)" : "rgba(245,158,11,0.4)"), display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:600, color:day.busy ? "#6ee7b7" : "#fcd34d", minHeight:28 } },
+            (wi * 7 + di + 1 <= 28) ? String(wi * 7 + di + 1) : "")))),
+    h("div", { style:{ display:"flex", gap:12, marginTop:8, marginBottom:14 } },
+      h("div", { style:{ display:"flex", alignItems:"center", gap:4 } },
+        h("div", { style:{ width:10, height:10, borderRadius:2, background:"rgba(16,185,129,0.4)" } }),
+        h("span", { style:{ fontSize:10, color:"#94a3b8" } }, "Есть записи")),
+      h("div", { style:{ display:"flex", alignItems:"center", gap:4 } },
+        h("div", { style:{ width:10, height:10, borderRadius:2, background:"rgba(245,158,11,0.4)" } }),
+        h("span", { style:{ fontSize:10, color:"#94a3b8" } }, "Свободно"))),
+    h("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 } },
+      [["Загрузка","80%"],["Свободных часов","35 ч"],["Цель доп. записи","30 ч"],["Доп. выручка","+750k ₸"]].map((m,i) =>
+        h("div", { key:i, style:{ background:"rgba(255,255,255,0.03)", borderRadius:8, padding:"8px 10px", textAlign:"center" } },
+          h("div", { style:{ fontSize:9, color:"#64748b" } }, m[0]),
+          h("div", { style:{ fontSize:14, fontWeight:700, color:i===3?"#10b981":"#f8fafc" } }, m[1])))),
+    h("div", { style:{ padding:10, background:"rgba(16,185,129,0.06)", border:"1px solid rgba(16,185,129,0.15)", borderRadius:8, fontSize:11, color:"#6ee7b7", lineHeight:1.6 } },
+      "💡 В календаре есть свободные окна на 35 часов. Если найти пациентов на 30 часов — дополнительно можно заработать 750k ₸."));
+}
+
 function PanelPromo() {
   return h("div", null,
     h("h3", { style:{ fontSize:15, fontWeight:700, color:"#f8fafc", margin:"0 0 14px 0" } }, "🎯 Акция: Чистка -20%"),
@@ -395,7 +430,7 @@ const PANEL_MAP = {
   labOrders: PanelLabOrders, treatmentPlan: PanelTreatmentPlan, revenue: PanelRevenue,
   booking: PanelBooking, reschedule: PanelReschedule, message: PanelMessage,
   missedCalls: PanelMissedCalls, materials: PanelMaterials, invites: PanelInvites,
-  salary: PanelSalary, promo: PanelPromo, admins: PanelAdmins, sources: PanelSources,
+  salary: PanelSalary, revenueForecast: PanelRevenueForecast, promo: PanelPromo, admins: PanelAdmins, sources: PanelSources,
   campaignResults: PanelCampaign, reviews: PanelReviews, cancellations: PanelCancellations
 };
 
@@ -406,7 +441,8 @@ const CONVOS = {
     "Найди пациента Серикова":               { text:"**Серикова Айгуль Маратовна**\n\n⚠️ Риск оттока. 6 мес без визита. Есть 4 870 ₸ бонусов.\nПригласить на чистку?", panel:"patient" },
     "Покажи материалы с низким остатком":    { text:"⚠️ 3 ниже минимума:\n• **Композит A2** — 3 шт, ~4 дня\n• **Убистезин** — 8 карп, ~6 дней\n• **Перчатки M** — 12 пар, ~3 дня", panel:"materials" },
     "Кто из пациентов давно не был?":        { text:"**47 пациентов** просрочили цикл.\n\n🔴 Мухтаров — 12 мес\n🟡 Касымов — 8 мес\n🟡 Серикова — 6 мес\n\nОтправить приглашения?", panel:"invites" },
-    "Покажи зарплату врачей за этот месяц": { text:"Зарплата за март:\n\n👨‍⚕️ **Хасанов** — 600k ₸\n👩‍⚕️ **Аканова** — 450k ₸\n👨‍⚕️ **Лайчинов** — 220k ₸\n\nОбщий ФОТ: 1.27M ₸", panel:"salary" }
+    "Покажи зарплату врачей за этот месяц": { text:"Зарплата за март:\n\n👨‍⚕️ **Хасанов** — 600k ₸\n👩‍⚕️ **Аканова** — 450k ₸\n👨‍⚕️ **Лайчинов** — 220k ₸\n\nОбщий ФОТ: 1.27M ₸", panel:"salary" },
+    "Покажи прогноз выручки":               { text:"До конца месяца кресла заполнены на **80%**, в календаре есть свободные окна на **35 часов**.\n\nЕсли найти пациентов на 30 часов — дополнительно можно заработать **750k ₸**.\n\n📅 Открыла календарь загрузки.", panel:"revenueForecast" }
   },
   receptionist: {
     "Покажи расписание на сегодня":                                               { text:"6 пациентов + 2 свободных (12:00, 15:00).\nПервый — Айтымова 09:00.\n⚠️ Серикова 11:00 — позвоните за час.\n3 заявки из WhatsApp.", panel:"schedule" },
